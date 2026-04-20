@@ -1,0 +1,13 @@
+PyQt5>=5.15.0
+yt-dlp>=2024.1.0
+openai>=1.0.0
+ffmpeg-python>=0.2.0
+pysubs2>=1.7.0
+requests>=2.31.0
+gTTS>=2.4.0
+edge-tts>=6.1.0
+
+# Optional: only needed if using Whisper LOCAL mode
+# Uncomment the lines below if you want local Whisper (requires torch):
+# openai-whisper>=20231117
+# torch>=2.0.0
