@@ -6,6 +6,8 @@ pysubs2>=1.7.0
 requests>=2.31.0
 gTTS>=2.4.0
 edge-tts>=6.1.0
+Pillow>=10.0.0
+numpy>=1.24.0
 
 # Optional: only needed if using Whisper LOCAL mode
 # Uncomment the lines below if you want local Whisper (requires torch):

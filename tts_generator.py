@@ -1,9 +1,11 @@
 """
 Video Translator Tool - TTS Generator
-Supports multiple TTS engines: OpenAI TTS (paid) and Google TTS (free).
+Supports multiple TTS engines: OpenAI TTS (paid), Google TTS (free),
+Edge TTS (free), and FPT.AI TTS (free, Vietnamese-specialized).
 """
 
 import os
+import time
 import tempfile
 
 
@@ -157,11 +159,72 @@ class EdgeTTSEngine(BaseTTSEngine):
         return output_path
 
 
+class FPTAITTSEngine(BaseTTSEngine):
+    """FPT.AI TTS - Free, Vietnamese-specialized, high quality voices."""
+
+    # Vietnamese voices from FPT.AI
+    VOICES = {
+        "banmai": "Nữ miền Bắc",
+        "thuminh": "Nữ miền Bắc",
+        "leminh": "Nam miền Bắc",
+        "myan": "Nữ miền Trung",
+        "giahuy": "Nam miền Trung",
+        "lannhi": "Nữ miền Nam",
+        "lianh": "Nữ miền Nam",
+    }
+
+    # Speed mapping: label -> API value
+    SPEED_MAP = {
+        "slow": "-1",
+        "normal": "0",
+        "fast": "1",
+    }
+
+    API_URL = "https://api.fpt.ai/hmi/tts/v5"
+
+    def __init__(self, api_key, voice="banmai", speed="normal"):
+        self.api_key = api_key
+        self.voice = voice
+        self.speed = self.SPEED_MAP.get(speed, "0")
+
+    def generate_segment_audio(self, text, output_path):
+        import requests
+
+        headers = {
+            "api-key": self.api_key,
+            "speed": self.speed,
+            "voice": self.voice,
+        }
+
+        response = requests.post(self.API_URL, data=text.encode("utf-8"), headers=headers)
+        response.raise_for_status()
+
+        result = response.json()
+        audio_url = result.get("async")
+        if not audio_url:
+            raise RuntimeError(f"FPT.AI returned no audio URL: {result}")
+
+        # FPT.AI generates audio asynchronously; poll until the file is ready
+        max_retries = 30
+        for attempt in range(max_retries):
+            time.sleep(1)
+            audio_resp = requests.get(audio_url)
+            if audio_resp.status_code == 200 and len(audio_resp.content) > 0:
+                content_type = audio_resp.headers.get("Content-Type", "")
+                if "audio" in content_type or audio_resp.content[:4] == b"ID3\x03" or audio_resp.content[:4] == b"\xff\xfb":
+                    with open(output_path, "wb") as f:
+                        f.write(audio_resp.content)
+                    return output_path
+            # Not ready yet, keep waiting
+
+        raise RuntimeError(f"FPT.AI audio not ready after {max_retries} seconds: {audio_url}")
+
+
 def create_tts_engine(provider, **kwargs):
     """
     Factory function to create TTS engine.
 
-    provider: "openai", "google", or "edge"
+    provider: "openai", "google", "edge", or "fptai"
     kwargs: provider-specific arguments
     """
     if provider == "openai":
@@ -181,6 +244,12 @@ def create_tts_engine(provider, **kwargs):
             voice=kwargs.get("voice", "vi-VN-HoaiMyNeural"),
             rate=kwargs.get("rate", "+0%"),
             pitch=kwargs.get("pitch", "+0Hz"),
+        )
+    elif provider == "fptai":
+        return FPTAITTSEngine(
+            api_key=kwargs.get("api_key", ""),
+            voice=kwargs.get("voice", "banmai"),
+            speed=kwargs.get("speed", "normal"),
         )
     else:
         raise ValueError(f"Unknown TTS provider: {provider}")
